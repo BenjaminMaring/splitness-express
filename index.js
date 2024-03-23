@@ -93,13 +93,12 @@ app.put('/users', async (req, res) => {
 
 
 
-//this is used to sign in
 app.post("/signin", async (req, res) => {
     try {
         //initialize variables
         let userObj = {};
         const { login, password: userEnteredPassword } = req.body;
-        let emailCheck = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+        const emailCheck = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
 
         //if it is an email query based on the email, otherwise query based on username
         if (emailCheck.test(login)) {
