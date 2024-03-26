@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
@@ -28,7 +30,6 @@ const pool = mysql.createPool({
     port: 3308
 });
 
-
 // Makes Express parse the JSON body of any requests and adds the body to the req object
 app.use(bodyParser.json());
 
@@ -55,9 +56,16 @@ app.use(async (req, res, next) => {
   }
 });
 
+/* 
+*   CODE FOR USERS
+*   
+*   API call to create a new user
+*   API call to sign in and get user info
+*   API call to delete a user
+*   
+*/
 // code to add a new user to the database
-app.put('/users', async (req, res) => {
-    
+app.put('/signup', async (req, res) => {
     try {
         //get the data from the request to create a new user
         const {
@@ -66,32 +74,34 @@ app.put('/users', async (req, res) => {
             password
         } = req.body;
 
+        const defaultProfilePicture = fs.readFileSync(path.join(__dirname, 'pictures/profile-pic.jpg'));
+
         //check if the email is being used
         const [[validateEmail]] = await req.db.query(`SELECT email FROM users WHERE email = :email`, { email });
         const [[validateUser]] = await req.db.query(`SELECT username FROM users WHERE username = :username`, { username });
 
         if (validateEmail) {
-            res.send('email already in use');
+            res.json({success: false, err: "Email already in use"});
         } else if (validateUser) {
-            res.send('username already taken');
+            res.json({success: false, err: "Username already taken"});
         } else {
 
             //hash their password
             const hashedPassword = await bcrypt.hash(password, 10);
             
             //attempt to insert the data into the database
-            const [insert] = await req.db.query(`INSERT INTO users (username, email, password) VALUES (:username, :email, :hashedPassword);`, 
-            { username, email, hashedPassword});
+            const [insert] = await req.db.query(`INSERT INTO users (username, email, password, profile_pic) 
+                                                            VALUES (:username, :email, :hashedPassword, :defaultProfilePicture);`, 
+            { username, email, hashedPassword, defaultProfilePicture});
             console.log(`user created successfully: username - ${username}, email - ${email}`)
-            res.send(`user created successfully`)
+            res.json({success: true, err: "Internal Error"});
         }
         
     } catch(error) {
+        res.json({success: false, err: "Internal Error"});
         console.log(`error creating user ${error}`);
     }
 }) // end user post
-
-
 
 app.post("/signin", async (req, res) => {
     try {
@@ -134,6 +144,8 @@ app.post("/signin", async (req, res) => {
     }
 })
 
+
+
 //gets a list of all the users
 //not intended to be used in final project, just for practicing and getting started
 app.get('/users', async (req, res) => {
@@ -142,6 +154,16 @@ app.get('/users', async (req, res) => {
     res.send(users);
 }) 
 
+/* 
+*   CODE FOR WORKOUTS
+*   
+*   API call to get all workouts
+*   API call to delete a workout
+*   API call to delete a workout
+*
+*/
+
+//starts the server
 app.listen(port, () => {
     console.log(`Server started listening on port ${port}`);
 })
