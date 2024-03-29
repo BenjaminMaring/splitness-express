@@ -43,7 +43,7 @@ app.use(async (req, res, next) => {
     await req.db.query(`SET time_zone = '-8:00'`);
 
     // Moves the request on down the line to the next middleware functions and/or the endpoint it's headed for
-    await next();
+    next();
 
     // After the endpoint has been reached and resolved, disconnects from the database
     req.db.release();
@@ -90,20 +90,34 @@ app.put('/signup', async (req, res) => {
             const hashedPassword = await bcrypt.hash(password, 10);
             
             //attempt to insert the data into the database
-            const [insert] = await req.db.query(`INSERT INTO users (username, email, password, profile_pic) 
-                                                            VALUES (:username, :email, :hashedPassword, :defaultProfilePicture);`, 
+            const insert = await req.db.query(`INSERT INTO users (username, email, password, profile_pic) 
+                                                          VALUES (:username, :email, :hashedPassword, :defaultProfilePicture);`, 
             { username, email, hashedPassword, defaultProfilePicture});
-            console.log(`user created successfully: username - ${username}, email - ${email}`)
-            res.json({success: true, err: "Internal Error"});
+
+            //need to query into the db to get the newly created users id, username, and profilepic
+            const [userData] = await req.db.query(`SELECT user_id, username FROM Users WHERE username = :username`, {
+                username
+            });
+
+            const payload = {
+                user_id: userData[0].user_id,
+                username: userData[0].username,
+            }
+
+            const jwtEncodedUser = jwt.sign(payload, process.env.JWT_KEY);
+                
+            res.json({ jwt: jwtEncodedUser, success: true, data: payload });
         }
-        
     } catch(error) {
-        res.json({success: false, err: "Internal Error"});
+        res.json({success: false, err: error});
         console.log(`error creating user ${error}`);
     }
 }) // end user post
 
+
+// endpoint used for signing in to a users account
 app.post("/signin", async (req, res) => {
+    console.log("/signin hit");
     try {
         //initialize variables
         let userObj = {};
@@ -122,20 +136,24 @@ app.post("/signin", async (req, res) => {
         //check if the user data is empty
         if (!userObj) {
             res.json({err: 'user doesnt exist', success: false});
+
+        //if the userData is not empty, check the passwords
         } else {
             const hashedPassword = `${userObj.password}`
             const passwordMatches = await bcrypt.compare(userEnteredPassword, hashedPassword);
 
+            //if the passwords dont match, res with a false success and err
             if (!passwordMatches) {
                 res.json({ err: 'invalid credentials', success: false });
             } else {
+                //if the passwords do match, create the payload for the jwt token
                 const payload = {
                     user_id: userObj.user_id,
-                    username: userObj.username,
+                    username: userObj.username
                   }
 
                   const jwtEncodedUser = jwt.sign(payload, process.env.JWT_KEY);
-                  res.json({ jwt: jwtEncodedUser, success: true });
+                  res.json({ jwt: jwtEncodedUser, success: true, data: payload });
             }
         }
     } catch(error) {
@@ -143,25 +161,106 @@ app.post("/signin", async (req, res) => {
         res.json({err: error, success: false});
     }
 })
+ 
+//validates auth token to access database 
+app.use(async function verifyJwt(req, res, next) {
+    const { authorization: authHeader } = req.headers;
+    
+    if (!authHeader) {
+        res.json({success: false, err: "No authorization headers"});
+        return;
+    }
+ 
+    const [scheme, jwtToken] = authHeader.split(' ');
 
+    // if (scheme !== 'Bearer') res.json('Invalid authorization, invalid authorization scheme');
+    
+    // try {
+    //   const decodedJwtObject = jwt.verify(jwtToken, process.env.JWT_KEY);
+  
+    //   req.user = decodedJwtObject;
+    // } catch (err) {
+    //   console.log(err);
+    //   if (
+    //     err.message && 
+    //     (err.message.toUpperCase() === 'INVALID TOKEN' || 
+    //     err.message.toUpperCase() === 'JWT EXPIRED')
+    //   ) {
+  
+    //     req.status = err.status || 500;
+    //     req.body = err.message;
+    //     req.app.emit('jwt-error', err, req);
+    //   } else {
+    //     console.log("error")
+    //     // throw((err.status || 500), err.message);
+    //   }
+    // }
+   
+    next();
+  });
 
+//endpoint to get user information
+app.get('/user', async (req, res) => {
+    console.log("/user hit");
+    try {
+        const { user_id } = req.body;
 
-//gets a list of all the users
-//not intended to be used in final project, just for practicing and getting started
-app.get('/users', async (req, res) => {
-    const [users] = await req.db.query(`SELECT user_id, username, email FROM Users`)
-    console.log(users);
-    res.send(users);
-}) 
+        const [[userData]] = await req.db.query(`SELECT user_id, username, email, profile_pic 
+                                                 FROM Users 
+                                                 WHERE user_id = :user_id`, {
+                                                    user_id
+                                                })
+
+        if (!userData) {
+            res.json({success: false, err: "no valid user data"})
+        } else {
+            res.json({success: true, user_data: userData})
+        }
+    } catch(err) {
+        console.log(err);
+        res.json({success: false, err: err})
+    }
+})
 
 /* 
 *   CODE FOR WORKOUTS
 *   
-*   API call to get all workouts
+*   API call to get Recent workouts
+*   API call tp 
 *   API call to delete a workout
 *   API call to delete a workout
 *
 */
+
+app.post('/workouts/recent', async (req, res) => {
+    console.log("here");
+    try {
+        const { user_id } = req.body;
+        console.log("/workouts/recent hit id: " + user_id)
+
+        if (!user_id) {
+            res.json({succes: false, err: "missing user_id"});
+            return;
+        }
+
+        const [workoutData] = await req.db.query(`SELECT * 
+                                                    FROM Workouts 
+                                                    WHERE user_id = :user_id 
+                                                    ORDER BY last_edited DESC
+                                                    LIMIT 5`, {
+                                                        user_id
+                                                    });
+
+        if (!workoutData) {
+            res.json({success: false, err: "No Recent Workouts"})
+        } else {
+            res.json({success: true, data: workoutData});
+        }
+    } catch (err) {
+        console.log(err);
+        res.json({success: false, err: err})
+    }
+}) 
 
 //starts the server
 app.listen(port, () => {
