@@ -173,37 +173,42 @@ app.use(async function verifyJwt(req, res, next) {
  
     const [scheme, jwtToken] = authHeader.split(' ');
 
-    // if (scheme !== 'Bearer') res.json('Invalid authorization, invalid authorization scheme');
-    
-    // try {
-    //   const decodedJwtObject = jwt.verify(jwtToken, process.env.JWT_KEY);
+    if (scheme !== 'Bearer') {
+        res.json({success: false, err: 'Invalid authorization, invalid authorization scheme' });
+        return 
+    } 
+     
+    try {
+      const decodedJwtObject = jwt.verify(jwtToken, process.env.JWT_KEY);
   
-    //   req.user = decodedJwtObject;
-    // } catch (err) {
-    //   console.log(err);
-    //   if (
-    //     err.message && 
-    //     (err.message.toUpperCase() === 'INVALID TOKEN' || 
-    //     err.message.toUpperCase() === 'JWT EXPIRED')
-    //   ) {
+      req.user = decodedJwtObject;
+    } catch (err) {
+      console.log(err);
+      if (
+        err.message && 
+        (err.message.toUpperCase() === 'INVALID TOKEN' || 
+        err.message.toUpperCase() === 'JWT EXPIRED')
+      ) {
   
-    //     req.status = err.status || 500;
-    //     req.body = err.message;
-    //     req.app.emit('jwt-error', err, req);
-    //   } else {
-    //     console.log("error")
-    //     // throw((err.status || 500), err.message);
-    //   }
-    // }
+        req.status = err.status || 500;
+        req.body = err.message;
+        req.app.emit('jwt-error', err, req);
+      } else {
+        console.log("error")
+        throw((err.status || 500), err.message);
+      }
+    }
    
     next();
   });
-
+ 
 //endpoint to get user information
 app.get('/user', async (req, res) => {
     console.log("/user hit");
     try {
         const { user_id } = req.body;
+ 
+        console.log(user_id);
 
         const [[userData]] = await req.db.query(`SELECT user_id, username, email, profile_pic 
                                                  FROM Users 
@@ -233,9 +238,8 @@ app.get('/user', async (req, res) => {
 */
 
 app.post('/workouts/recent', async (req, res) => {
-    console.log("here");
     try {
-        const { user_id } = req.body;
+        const { user_id } = req.user;
         console.log("/workouts/recent hit id: " + user_id)
 
         if (!user_id) {
@@ -257,7 +261,7 @@ app.post('/workouts/recent', async (req, res) => {
             res.json({success: true, data: workoutData});
         }
     } catch (err) {
-        console.log(err);
+        // console.log(err);
         res.json({success: false, err: err})
     }
 }) 
@@ -265,4 +269,4 @@ app.post('/workouts/recent', async (req, res) => {
 //starts the server
 app.listen(port, () => {
     console.log(`Server started listening on port ${port}`);
-})
+}) 
