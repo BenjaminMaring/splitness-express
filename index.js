@@ -33,6 +33,14 @@ const pool = mysql.createPool({
 // Makes Express parse the JSON body of any requests and adds the body to the req object
 app.use(bodyParser.json());
 
+/*
+*
+*
+* CHECK READEME.MD FOR TABLE OF CONTENTS FOR ENDPOINTS
+*
+*
+*/
+
 app.use(async (req, res, next) => {
   try {
     // Connecting to our SQL db. req gets modified and is available down the line in other middleware and endpoint functions
@@ -161,26 +169,59 @@ app.post("/signin", async (req, res) => {
         res.json({err: error, success: false});
     }
 })
+
+app.post('/workouts/:id', async (req, res) => {
+
+    //get the workout id
+    const { id: workout_id } = req.params
+
+    try {
+
+        //try to query the db for the workout data
+
+        const [[data]] = req.db.query(`SELECT workout_name, `, {
+            workout_id
+        });
+
+        //chec if there is data, then check if the data is public. if it is public, then send the data
+        if (!data) {
+            res.json({success: false, err: "no workout found"});
+            return;
+        } else if (!data.public) {
+            res.json({success: true, public: false})
+            return;
+        } else {
+            res.json({ success: true, public: true, data: data})
+        }
+    } catch (error) {
+        console.log(error)
+        res.json({ success: false, err: err });
+    }
+})
  
 //validates auth token to access database 
 app.use(async function verifyJwt(req, res, next) {
     const { authorization: authHeader } = req.headers;
     
+    //check for the header
     if (!authHeader) {
         res.json({success: false, err: "No authorization headers"});
         return;
     }
  
+    //split the header to check if it has Bearer 
     const [scheme, jwtToken] = authHeader.split(' ');
 
     if (scheme !== 'Bearer') {
         res.json({success: false, err: 'Invalid authorization, invalid authorization scheme' });
         return 
     } 
-     
+    
     try {
+        //decode the jwt and check if its valid
       const decodedJwtObject = jwt.verify(jwtToken, process.env.JWT_KEY);
   
+      //add the payload in the jwt object onto the req obj so the payload can be used in future endpoints
       req.user = decodedJwtObject;
     } catch (err) {
       console.log(err);
@@ -206,9 +247,8 @@ app.use(async function verifyJwt(req, res, next) {
 app.get('/user', async (req, res) => {
     console.log("/user hit");
     try {
-        const { user_id } = req.body;
- 
-        console.log(user_id);
+        //get user id from req payload
+        const { user_id } = req.user;
 
         const [[userData]] = await req.db.query(`SELECT user_id, username, email, profile_pic 
                                                  FROM Users 
@@ -231,7 +271,7 @@ app.get('/user', async (req, res) => {
 *   CODE FOR WORKOUTS
 *   
 *   API call to get Recent workouts
-*   API call tp 
+*   API call t0 get all workouts for a user
 *   API call to delete a workout
 *   API call to delete a workout
 *
@@ -248,12 +288,12 @@ app.post('/workouts/recent', async (req, res) => {
         }
 
         const [workoutData] = await req.db.query(`SELECT * 
-                                                    FROM Workouts 
-                                                    WHERE user_id = :user_id 
-                                                    ORDER BY last_edited DESC
-                                                    LIMIT 5`, {
-                                                        user_id
-                                                    });
+                                                  FROM Workouts 
+                                                  WHERE user_id = :user_id 
+                                                  ORDER BY last_edited DESC
+                                                  LIMIT 5`, {
+                                                    user_id
+                                                });
 
         if (!workoutData) {
             res.json({success: false, err: "No Recent Workouts"})
@@ -265,6 +305,35 @@ app.post('/workouts/recent', async (req, res) => {
         res.json({success: false, err: err})
     }
 }) 
+
+//gets all of the users workouts
+app.post('/workouts/all', async (req, res) => {
+    try {
+        const { user_id } = req.user;
+        console.log("/workouts/all hit id: " + user_id)
+
+        if (!user_id) {
+            res.json({succes: false, err: "missing user_id"});
+            return;
+        }
+
+        const [workoutData] = await req.db.query(`SELECT * 
+                                                  FROM Workouts 
+                                                  WHERE user_id = :user_id`, {
+                                                    user_id
+                                                });
+
+        if (!workoutData) {
+            res.json({success: false, err: "No Workouts"})
+        } else {
+            res.json({success: true, data: workoutData});
+        }
+    } catch (err) {
+        // console.log(err);
+        res.json({success: false, err: err})
+    }
+}) 
+
 
 //starts the server
 app.listen(port, () => {
