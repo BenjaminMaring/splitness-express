@@ -170,7 +170,7 @@ app.post("/signin", async (req, res) => {
     }
 })
 
-app.post('/workouts/:id', async (req, res) => {
+app.post('/workouts/workout/:id', async (req, res) => {
 
     //get the workout id
     const { id: workout_id } = req.params
@@ -193,8 +193,8 @@ app.post('/workouts/:id', async (req, res) => {
         } else {
             res.json({ success: true, public: true, data: data})
         }
-    } catch (error) {
-        console.log(error)
+    } catch (err) {
+        console.log(err)
         res.json({ success: false, err: err });
     }
 })
