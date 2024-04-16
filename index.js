@@ -272,7 +272,7 @@ app.get('/user', async (req, res) => {
 *   
 *   API call to get Recent workouts
 *   API call t0 get all workouts for a user
-*   API call to delete a workout
+*   API call to create a workout
 *   API call to delete a workout
 *
 */
@@ -319,7 +319,8 @@ app.post('/workouts/all', async (req, res) => {
 
         const [workoutData] = await req.db.query(`SELECT * 
                                                   FROM Workouts 
-                                                  WHERE user_id = :user_id`, {
+                                                  WHERE user_id = :user_id
+                                                  ORDER BY last_edited DESC`, {
                                                     user_id
                                                 });
 
@@ -333,6 +334,31 @@ app.post('/workouts/all', async (req, res) => {
         res.json({success: false, err: err})
     }
 }) 
+
+app.post('/workouts/new', async (req, res) => {
+    try {
+        //get user id
+        const { user_id } = req.user;
+        
+        //create the date for the last_edited
+        const date = new Date();
+
+        //create new default workout
+        const [query] = await req.db.query(`INSERT INTO Workouts (workout_name, weekly, public, user_id, last_edited)
+                                            VALUES ("New Workout", false, false, :user_id, :date)
+                                            SELECT LAST_INSERT_ID();`, {
+                                                user_id, date
+                                            })
+        
+        //create the users access
+        const [query] = await
+
+
+    } catch (err) {
+        console.log(err);
+        req.json({success: false, err: "Internal Server Error"});
+    }
+})
 
 
 //starts the server
