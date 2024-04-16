@@ -344,15 +344,18 @@ app.post('/workouts/new', async (req, res) => {
         const date = new Date();
 
         //create new default workout
-        const [query] = await req.db.query(`INSERT INTO Workouts (workout_name, weekly, public, user_id, last_edited)
-                                            VALUES ("New Workout", false, false, :user_id, :date)
-                                            SELECT LAST_INSERT_ID();`, {
+        const [[query]] = await req.db.query(`INSERT INTO Workouts (workout_name, weekly, public, user_id, last_edited)
+                                            VALUES ("New Workout", false, false, :user_id, :date); SELECT LAST_INSERT_ID()`, {
                                                 user_id, date
                                             })
         
         //create the users access
-        const [query] = await
+         await req.db.query(`INSERT INTO workout_access (role, workout_id, user_id)
+                             VALUES ("Admin", :query.workout_id, :user_id)`, {
+                                workout_id, user_id
+                             }) 
 
+        res.json({success: true, workout_id: workout_id})
 
     } catch (err) {
         console.log(err);
