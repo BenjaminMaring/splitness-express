@@ -230,7 +230,7 @@ app.use(async function verifyJwt(req, res, next) {
         (err.message.toUpperCase() === 'INVALID TOKEN' || 
         err.message.toUpperCase() === 'JWT EXPIRED')
       ) {
-  
+   
         req.status = err.status || 500;
         req.body = err.message;
         req.app.emit('jwt-error', err, req);
@@ -319,7 +319,7 @@ app.post('/workouts/all', async (req, res) => {
 
         const [workoutData] = await req.db.query(`SELECT * 
                                                   FROM Workouts 
-                                                  WHERE user_id = :user_id
+                                                  WHERE user_id = :user_id AND deleted_flag = 0
                                                   ORDER BY last_edited DESC`, {
                                                     user_id
                                                 });
@@ -344,22 +344,55 @@ app.post('/workouts/new', async (req, res) => {
         const date = new Date();
 
         //create new default workout
-        const [[query]] = await req.db.query(`INSERT INTO Workouts (workout_name, weekly, public, user_id, last_edited)
-                                            VALUES ("New Workout", false, false, :user_id, :date); SELECT LAST_INSERT_ID()`, {
+        const [query] = await req.db.query(`INSERT INTO Workouts (workout_name, weekly, public, user_id, last_edited)
+                                            VALUES ("New Workout", false, false, :user_id, :date)`, {
                                                 user_id, date
                                             })
+
+        //get the most workout id of the just created workout
+        const { insertId: workout_id } = query
+
+        console.log(query.insertId); 
         
         //create the users access
          await req.db.query(`INSERT INTO workout_access (role, workout_id, user_id)
-                             VALUES ("Admin", :query.workout_id, :user_id)`, {
+                             VALUES ("Admin", :workout_id, :user_id)`, {
                                 workout_id, user_id
                              }) 
 
-        res.json({success: true, workout_id: workout_id})
-
+        res.json({success: true, workout_id: workout_id});
+ 
     } catch (err) {
         console.log(err);
-        req.json({success: false, err: "Internal Server Error"});
+        res.json({success: false, err: "Internal Server Error"});
+    }
+}) 
+
+app.delete('/workouts/delete/:workout_id', async (req, res) => {
+    try {
+        const { workout_id } = req.params;
+
+        req.db.beginTransaction();
+
+        const [query] = await req.db.query(`UPDATE workouts
+                                            SET deleted_flag = 1
+                                            WHERE workout_id = :workout_id`, {
+            workout_id
+        });
+
+        await req.db.query(`UPDATE workout_access
+                            SET deleted_flag = 1
+                            WHERE workout_id = :workout_id`, {
+            workout_id
+        });
+
+        req.db.commit();
+
+        res.json({success: true, msg: "Workout Successfully deleted"})
+        
+    } catch (err) {
+        console.log(err);
+        res.json({ success: false, err: "Internal Server Error"})
     }
 })
 
